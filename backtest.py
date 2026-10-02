@@ -22,25 +22,27 @@ def find_trades(event, hold=5):
     return trades
 
 
-def run_backtest(df, event, hold=5, cost_per_side=0.0005):
-    """Enter at close of the event day, exit at close `hold` days later.
-    cost_per_side is a fraction of trade value (0.0005 = 0.05%)."""
+def run_backtest(df, event, hold=5, cost_per_side=0.0005, direction=1, already_own=False):
+    """direction = 1 for long, -1 for short.
+    already_own=True: you hold the shares already, so only the exit cost is paid."""
     trades = find_trades(event, hold)
+    n_sides = 1 if already_own else 2
 
     position = pd.Series(0.0, index=df.index)
     cost = pd.Series(0.0, index=df.index)
     trade_rows = []
 
     for entry, exit_ in trades:
-        position.iloc[entry + 1 : exit_ + 1] = 1.0   # earns returns from day after entry to exit
-        cost.iloc[entry] += cost_per_side            # paid at the close you trade
+        position.iloc[entry + 1 : exit_ + 1] = float(direction)
+        if not already_own:
+            cost.iloc[entry] += cost_per_side
         cost.iloc[exit_] += cost_per_side
 
-        gross = df["price"].iloc[exit_] / df["price"].iloc[entry] - 1
+        gross = direction * (df["price"].iloc[exit_] / df["price"].iloc[entry] - 1)
         trade_rows.append({
             "entry_date": df.index[entry],
             "exit_date": df.index[exit_],
-            "return": gross - 2 * cost_per_side,
+            "return": gross - n_sides * cost_per_side,
         })
 
     daily = df["return_1d"].fillna(0)
@@ -65,11 +67,16 @@ def performance(returns):
         "max_drawdown": (equity / equity.cummax() - 1).min(),
     }
 
-def sweep_hold(df, event, holds=range(1, 61), cost_per_side=0.0005):
+
+def sweep_hold(df, event, holds=range(1, 61), cost_per_side=0.0005,
+               direction=1, already_own=False):
     rows = []
     for h in holds:
-        results, trades = run_backtest(df, event, hold=h, cost_per_side=cost_per_side)
-        if trades.empty:          # no trade could finish with this hold length
+        results, trades = run_backtest(df, event, hold=h,
+                                       cost_per_side=cost_per_side,
+                                       direction=direction,
+                                       already_own=already_own)
+        if trades.empty:
             continue
         perf = performance(results["strategy"])
         rows.append({
@@ -80,6 +87,6 @@ def sweep_hold(df, event, holds=range(1, 61), cost_per_side=0.0005):
             "total_return": perf["total_return"],
             "sharpe": perf["sharpe"],
             "max_drawdown": perf["max_drawdown"],
-            "time_in_market": results["position"].mean(),
+            "time_in_market": results["position"].abs().mean(),
         })
     return pd.DataFrame(rows).set_index("hold")
