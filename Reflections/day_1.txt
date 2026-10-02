@@ -1,0 +1,6 @@
+Today I built my first ever trading system. 
+I used AI to guide the necessary things in there and guide me on the most efficient practices and things I need to include.
+
+I tried various simple rules and found that if you buy when price is >3% below its 20-day average, but above its 200-day average, it has decent Sharpes of around 1.1 for certain stocks after 3 months or so. 
+It's not the best but it's a start.
+Next I'll try to see the best times to sell after you buy these.
