@@ -1,24 +1,35 @@
-import pandas as pd
-
 from data import load_prices, get_single
 from features import add_features
-from backtest import run_backtest, performance, sweep_hold
+from backtest import sweep_hold
 from plots import plot_sweep
+from rules import get_rule
+
+# -------------------- settings ------------------------
+RULE_NAME = "long_after_drop_1pct"
+TICKER = "IVV.AX"
+HOLDS = range(1, 61)
+COST = 0.0005
+# ------------------------------------------------------
 
 if __name__ == "__main__":
-    # 1. load data and build features
-    prices = load_prices()
-    df = get_single(prices, "IVV.AX")
-    print(df.head(10))        # raw data, before features are added
-    print(df.tail(3))         # most recent dates, to check the data is current
+    rule = get_rule(RULE_NAME)
+    print(f"Rule: {RULE_NAME}\n{rule['description']}\n")
+
+    prices = load_prices(TICKER)
+    df = get_single(prices, TICKER)
     df = add_features(df)
 
-    # Test 1: run a backtest with a variable-day holding period
-    event = df["return_1d"] < -0.01
+    event = rule["signal"](df)
     print(f"events: {event.sum()}")
 
-    sweep = sweep_hold(df, event, holds=range(1, 100), cost_per_side=0.0005)
+    sweep = sweep_hold(
+        df, event,
+        holds=HOLDS,
+        cost_per_side=COST,
+        direction=rule["direction"],
+        already_own=rule["already_own"],
+    )
     print(sweep.round(4))
 
-    plot_sweep(sweep, "avg_trade")
-    plot_sweep(sweep, "sharpe")
+    plot_sweep(sweep, "avg_trade", title=f"{RULE_NAME} ({TICKER}): avg trade")
+    plot_sweep(sweep, "sharpe", title=f"{RULE_NAME} ({TICKER}): Sharpe")

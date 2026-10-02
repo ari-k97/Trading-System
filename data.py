@@ -1,16 +1,22 @@
+import pandas as pd
 import yfinance as yf
 from datetime import date
 
-TICKERS = ["SPY", "IVV.AX", "^GSPC", "A200.AX", "IOZ.AX", "STW.AX"]
 
-
-def load_prices(tickers=TICKERS, start="2008-01-01", end=None):
+def load_prices(tickers, start="2008-01-01", end=None):
+    if isinstance(tickers, str):
+        tickers = [tickers]
     end = end or date.today()
+
     data = yf.download(tickers, start=start, end=end, auto_adjust=False)
-    return data["Adj Close"].copy()
+    prices = data["Adj Close"].copy()
+
+    if isinstance(prices, pd.Series):
+        prices = prices.to_frame(tickers[0])
+    return prices
 
 
-def get_single(prices, ticker="IVV.AX"):
+def get_single(prices, ticker):
     df = prices[[ticker]].copy()
     df = df.rename(columns={ticker: "price"})
     return df.dropna()
