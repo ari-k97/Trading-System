@@ -109,7 +109,7 @@ RULES = {
         "direction": 1,
         "already_own": False,
     },
-    "long_pullback_in_uptrend": {
+    "long_pullback_in_uptrend": { # sharpe decent
         "description": "Buy when price is >3% below its 20-day average, but above its 200-day average.",
         "signal": lambda df: (df["distance_20ma"] < -0.03) & (df["distance_200ma"] > 0),
         "direction": 1,
@@ -137,6 +137,33 @@ RULES = {
         "description": "Buy after a >1% drop, only when 20-day volatility is below its own 1-year median.",
         "signal": lambda df: (df["return_1d"] < -0.01)
                              & (df["vol_20"] < df["vol_20"].rolling(250).median()),
+        "direction": 1,
+        "already_own": False,
+    },
+    "long_golden_cross": {
+        "description": "Buy on days when the 50-day average is above the 200-day average (trend regime).",
+        "signal": lambda df: df["ma_50"] > df["ma_200"],
+        "direction": 1,
+        "already_own": False,
+    },
+    "long_new_52w_high": {
+        "description": "Buy when price closes at a new 250-day high (breakout/momentum).",
+        "signal": lambda df: df["price"] >= df["price"].rolling(250).max(),
+        "direction": 1,
+        "already_own": False,
+    },
+    "long_drawdown_5pct_in_uptrend": {
+        "description": "Buy when price is >5% below its 60-day high, but above its 200-day average.",
+        "signal": lambda df: (df["price"] / df["price"].rolling(60).max() - 1 < -0.05)
+                             & (df["distance_200ma"] > 0),
+        "direction": 1,
+        "already_own": False,
+    },
+    "long_vol_spike_in_uptrend": {
+        "description": "Buy when short-term volatility is double its 60-day level after a 5-day fall, in an uptrend.",
+        "signal": lambda df: (df["vol_5"] > 2 * df["vol_60"])
+                             & (df["return_5d"] < 0)
+                             & (df["distance_200ma"] > 0),
         "direction": 1,
         "already_own": False,
     },
