@@ -1,0 +1,4 @@
+Tried some new rules and still getting some pretty ordinary Sharpe results.
+I know Sharpe isn't everything, especially for shorter periods, but it's still not the results I'm quite looking for.
+I want to try different means of evaluating different rules and explore more diverse routes of obtaining information on these ETFs.
+So, I made a new file evaluation.py which has different methods of evaluation, and edited main.py accordingly.
