@@ -6,13 +6,23 @@ from features import add_features
 from backtest import sweep_hold
 from plots import plot_sweep
 from rules import get_rule
+from evaluation import evaluate
 
 # ---------- settings: change these, then run ----------
-RULE_NAME = "long_pullback_in_uptrend"
-TICKER = "AAPL"
-HOLDS = range(1, 501)        # holding periods to test
-LOOKBACKS = range(1, 1000)    # only used by the "n_day" rules
+RULE_NAME = "long_after_drop_1pct"
+TICKER = "IVV.AX"
 COST = 0.0005
+
+ACTION = "evaluate"          # "sweep" (all holding periods) or "evaluate" (one hold, detailed)
+
+# used when ACTION = "sweep"
+HOLDS = range(1, 31)
+LOOKBACKS = range(1, 21)     # only for the "n_day" rules
+
+# used when ACTION = "evaluate"
+EVALUATIONS = ["summary", "trades", "significance"]   # any of: summary, trades, significance, yearly, split, risk
+EVAL_HOLD = 5
+EVAL_LOOKBACK = 3            # only for the "n_day" rules
 # ------------------------------------------------------
 
 if __name__ == "__main__":
@@ -27,8 +37,17 @@ if __name__ == "__main__":
                   direction=rule["direction"],
                   already_own=rule["already_own"])
 
-    if "signal_n" in rule:
-        # one number per lookback n: Sharpe averaged across all the holds
+    if ACTION == "evaluate":
+        if "signal_n" in rule:
+            event = rule["signal_n"](df, EVAL_LOOKBACK)
+        else:
+            event = rule["signal"](df)
+        print(f"events: {event.sum()}")
+
+        evaluate(EVALUATIONS, df, event, hold=EVAL_HOLD, cost=COST,
+                 direction=rule["direction"], already_own=rule["already_own"])
+
+    elif "signal_n" in rule:
         rows = []
         for n in LOOKBACKS:
             event = rule["signal_n"](df, n)
@@ -42,7 +61,6 @@ if __name__ == "__main__":
             })
         summary = pd.DataFrame(rows).set_index("lookback")
 
-        # baseline: same trade type, no signal (fires every day)
         base = sweep_hold(df, df["return_1d"].notna(), holds=HOLDS, **common)
         baseline = base["sharpe"].mean()
 
@@ -60,12 +78,11 @@ if __name__ == "__main__":
         plt.show()
 
     else:
-        # normal rule: one sweep across the holding periods
         event = rule["signal"](df)
         print(f"events: {event.sum()}")
 
         sweep = sweep_hold(df, event, holds=HOLDS, **common)
-        # print(sweep.round(4))
+        print(sweep.round(4))
 
-        # plot_sweep(sweep, "avg_trade", title=f"{RULE_NAME} ({TICKER}): avg trade")
+        plot_sweep(sweep, "avg_trade", title=f"{RULE_NAME} ({TICKER}): avg trade")
         plot_sweep(sweep, "sharpe", title=f"{RULE_NAME} ({TICKER}): Sharpe")
