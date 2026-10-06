@@ -5,16 +5,20 @@ from scipy import stats
 from backtest import run_backtest, performance, TRADING_DAYS
 
 
+def _bt(df, event, s):
+    return run_backtest(df, event, hold=s["hold"], cost_per_side=s["cost"],
+                        direction=s["direction"], already_own=s["already_own"],
+                        delay=s["delay"])
+
+
 def _baseline_event(df):
     """Fires every day: the same trade as the rule, but with no signal."""
     return df["return_1d"].notna()
 
 
-def summary_vs_baseline(df, event, hold=5, cost=0.0005, direction=1, already_own=False):
-    res, trades = run_backtest(df, event, hold=hold, cost_per_side=cost,
-                               direction=direction, already_own=already_own)
-    base, base_trades = run_backtest(df, _baseline_event(df), hold=hold, cost_per_side=cost,
-                                     direction=direction, already_own=already_own)
+def summary_vs_baseline(df, event, s):
+    res, trades = _bt(df, event, s)
+    base, base_trades = _bt(df, _baseline_event(df), s)
 
     table = pd.DataFrame({
         "rule": performance(res["strategy"]),
@@ -29,11 +33,9 @@ def summary_vs_baseline(df, event, hold=5, cost=0.0005, direction=1, already_own
     return pd.concat([table, extra])
 
 
-def trade_stats(df, event, hold=5, cost=0.0005, direction=1, already_own=False):
-    _, trades = run_backtest(df, event, hold=hold, cost_per_side=cost,
-                             direction=direction, already_own=already_own)
-    _, base_trades = run_backtest(df, _baseline_event(df), hold=hold, cost_per_side=cost,
-                                  direction=direction, already_own=already_own)
+def trade_stats(df, event, s):
+    _, trades = _bt(df, event, s)
+    _, base_trades = _bt(df, _baseline_event(df), s)
 
     def stats_for(t):
         if t.empty:
@@ -61,11 +63,9 @@ def trade_stats(df, event, hold=5, cost=0.0005, direction=1, already_own=False):
     return out
 
 
-def significance(df, event, hold=5, cost=0.0005, direction=1, already_own=False):
-    _, trades = run_backtest(df, event, hold=hold, cost_per_side=cost,
-                             direction=direction, already_own=already_own)
-    _, base_trades = run_backtest(df, _baseline_event(df), hold=hold, cost_per_side=cost,
-                                  direction=direction, already_own=already_own)
+def significance(df, event, s):
+    _, trades = _bt(df, event, s)
+    _, base_trades = _bt(df, _baseline_event(df), s)
     if len(trades) < 5 or len(base_trades) < 5:
         return pd.Series({"note": "too few trades to test"})
 
@@ -90,9 +90,8 @@ def significance(df, event, hold=5, cost=0.0005, direction=1, already_own=False)
     })
 
 
-def yearly_breakdown(df, event, hold=5, cost=0.0005, direction=1, already_own=False):
-    res, trades = run_backtest(df, event, hold=hold, cost_per_side=cost,
-                               direction=direction, already_own=already_own)
+def yearly_breakdown(df, event, s):
+    res, trades = _bt(df, event, s)
     year = res.index.year
     yearly = pd.DataFrame({
         "rule": (1 + res["strategy"]).groupby(year).prod() - 1,
@@ -108,13 +107,12 @@ def yearly_breakdown(df, event, hold=5, cost=0.0005, direction=1, already_own=Fa
     return yearly
 
 
-def split_test(df, event, hold=5, cost=0.0005, direction=1, already_own=False, split=0.7):
-    k = int(len(df) * split)
+def split_test(df, event, s):
+    k = int(len(df) * s.get("split", 0.7))
     cols = {}
     for part, sl in [("first", slice(0, k)), ("last", slice(k, None))]:
         d, e = df.iloc[sl], event.iloc[sl]
-        res, trades = run_backtest(d, e, hold=hold, cost_per_side=cost,
-                                   direction=direction, already_own=already_own)
+        res, trades = _bt(d, e, s)
         perf = performance(res["strategy"])
         label = f"{part} {d.index[0].date()} to {d.index[-1].date()}"
         cols[label] = {
@@ -127,9 +125,8 @@ def split_test(df, event, hold=5, cost=0.0005, direction=1, already_own=False, s
     return pd.DataFrame(cols)
 
 
-def risk_metrics(df, event, hold=5, cost=0.0005, direction=1, already_own=False):
-    res, _ = run_backtest(df, event, hold=hold, cost_per_side=cost,
-                          direction=direction, already_own=already_own)
+def risk_metrics(df, event, s):
+    res, _ = _bt(df, event, s)
     out = {}
     for name, col in [("rule", "strategy"), ("buy_hold", "buy_hold")]:
         r = res[col].fillna(0)
@@ -156,11 +153,14 @@ EVALUATIONS = {
 }
 
 
-def evaluate(names, df, event, **kwargs):
+def evaluate(names, df, event, **settings):
     """Run the named evaluations in order and print each result."""
+    s = {"hold": 5, "cost": 0.0005, "direction": 1, "already_own": False, "delay": 0}
+    s.update(settings)
+
     for name in names:
         if name not in EVALUATIONS:
             raise KeyError(f"Unknown evaluation '{name}'. Available: {list(EVALUATIONS)}")
     for name in names:
         print(f"\n===== {name} =====")
-        print(EVALUATIONS[name](df, event, **kwargs).round(4))
+        print(EVALUATIONS[name](df, event, s).round(4))
