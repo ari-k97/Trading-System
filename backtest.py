@@ -4,28 +4,31 @@ import pandas as pd
 TRADING_DAYS = 252
 
 
-def find_trades(event, hold=5):
-    """Return (entry_idx, exit_idx) pairs. One position at a time:
-    events that fire while you're already in a trade are ignored."""
+def find_trades(event, hold=5, delay=0):
+    """Return (entry_idx, exit_idx) pairs. One position at a time.
+    A signal on day i enters at day i + delay and exits `hold` days after entry."""
     sig = event.to_numpy()
     n = len(sig)
     trades = []
     i = 0
     while i < n - 1:
         if sig[i]:
-            if i + hold > n - 1:      # not enough data left to finish the trade
+            entry = i + delay
+            exit_ = entry + hold
+            if exit_ > n - 1:        # not enough data left to finish the trade
                 break
-            trades.append((i, i + hold))
-            i += hold                 # next entry can happen on the exit day
+            trades.append((entry, exit_))
+            i = exit_
         else:
             i += 1
     return trades
 
 
-def run_backtest(df, event, hold=5, cost_per_side=0.0005, direction=1, already_own=False):
-    """direction = 1 for long, -1 for short.
-    already_own=True: you hold the shares already, so only the exit cost is paid."""
-    trades = find_trades(event, hold)
+def run_backtest(df, event, hold=5, cost_per_side=0.0005, direction=1,
+                 already_own=False, delay=0):
+    """direction: 1 long, -1 short. already_own: only the exit cost is paid.
+    delay: 0 = trade at the signal day's close, 1 = next day's close."""
+    trades = find_trades(event, hold, delay)
     n_sides = 1 if already_own else 2
 
     position = pd.Series(0.0, index=df.index)
@@ -69,13 +72,14 @@ def performance(returns):
 
 
 def sweep_hold(df, event, holds=range(1, 61), cost_per_side=0.0005,
-               direction=1, already_own=False):
+               direction=1, already_own=False, delay=0):
     rows = []
     for h in holds:
         results, trades = run_backtest(df, event, hold=h,
                                        cost_per_side=cost_per_side,
                                        direction=direction,
-                                       already_own=already_own)
+                                       already_own=already_own,
+                                       delay=delay)
         if trades.empty:
             continue
         perf = performance(results["strategy"])
